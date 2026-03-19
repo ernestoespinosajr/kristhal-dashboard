@@ -9,8 +9,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://kristhal-dashboard.vercel.app"),
   title: "KRISTHAL — Dashboard",
   description: "Sistema de Planificación, Monitoreo y Evaluación",
+  openGraph: {
+    title: "KRISTHAL — Dashboard",
+    description: "Sistema de Planificación, Monitoreo y Evaluación",
+    images: [{ url: "/kristhal-isotipo.png", width: 512, height: 512 }],
+  },
 };
 
 export default function RootLayout({
