@@ -1,0 +1,165 @@
+import { TareaHeader, DashboardStats, GerenciaStats, ProductStats, TaskRisk, HeatmapCell } from "@/types/api";
+
+const API_BASE = "https://squareconnection.azurewebsites.net/api";
+
+export async function fetchTareasHeader(): Promise<TareaHeader[]> {
+  const res = await fetch(`${API_BASE}/TareasHeader`, {
+    next: { revalidate: 300 },
+  });
+
+  if (!res.ok) {
+    throw new Error(`API error: ${res.status}`);
+  }
+
+  return res.json();
+}
+
+function getTaskStatus(record: TareaHeader): "completed" | "in_progress" | "pending" {
+  const avance = parseInt(record.AvanceTarea ?? "0", 10);
+  if (avance >= 100) return "completed";
+  if (avance > 0) return "in_progress";
+  return "pending";
+}
+
+function computeProductStats(data: TareaHeader[]): ProductStats[] {
+  const productMap = new Map<number, ProductStats>();
+
+  for (const r of data) {
+    if (r.IDProductos == null || r.Producto == null) continue;
+    if (!productMap.has(r.IDProductos)) {
+      productMap.set(r.IDProductos, {
+        id: r.IDProductos,
+        name: r.Producto.trim(),
+        progress: r.AvanceProducto ?? 0,
+        gerenciaId: r.IDUnidadRectora,
+        gerenciaName: r.Rectora.trim(),
+        taskCount: 0,
+      });
+    }
+    if (r.IDTarea !== null) {
+      productMap.get(r.IDProductos)!.taskCount++;
+    }
+  }
+
+  return Array.from(productMap.values()).sort((a, b) => b.progress - a.progress);
+}
+
+function computeTaskRisks(data: TareaHeader[]): TaskRisk[] {
+  const now = Date.now();
+  const risks: TaskRisk[] = [];
+
+  for (const r of data) {
+    if (r.IDTarea == null || r.FechaInicio == null || r.FechaFin == null) continue;
+
+    const start = new Date(r.FechaInicio).getTime();
+    const end = new Date(r.FechaFin).getTime();
+    const duration = end - start;
+    if (duration <= 0) continue;
+
+    const elapsed = Math.min(now - start, duration);
+    if (elapsed <= 0) continue;
+
+    const expectedProgress = Math.round((elapsed / duration) * 100);
+    const actualProgress = parseInt(r.AvanceTarea ?? "0", 10);
+    const riskScore = expectedProgress - actualProgress;
+
+    if (riskScore > 10) {
+      risks.push({
+        taskId: r.IDTarea,
+        taskName: (r.Tarea ?? "").trim(),
+        gerenciaId: r.IDUnidadRectora,
+        gerenciaName: r.Rectora.trim(),
+        actualProgress,
+        expectedProgress,
+        riskScore,
+      });
+    }
+  }
+
+  return risks.sort((a, b) => b.riskScore - a.riskScore).slice(0, 10);
+}
+
+function computeHeatmapCells(data: TareaHeader[]): HeatmapCell[] {
+  const seen = new Set<string>();
+  const cells: HeatmapCell[] = [];
+
+  for (const r of data) {
+    if (r.IDProductos == null || r.Producto == null) continue;
+    const key = `${r.IDUnidadRectora}-${r.IDProductos}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    cells.push({
+      gerenciaId: r.IDUnidadRectora,
+      gerenciaName: r.Rectora.trim(),
+      productId: r.IDProductos,
+      productName: r.Producto.trim(),
+      progress: r.AvanceProducto ?? 0,
+    });
+  }
+
+  return cells;
+}
+
+export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
+  const tasks = data.filter((r) => r.IDTarea !== null);
+
+  let completed = 0;
+  let inProgress = 0;
+  let pending = 0;
+
+  for (const t of tasks) {
+    const status = getTaskStatus(t);
+    if (status === "completed") completed++;
+    else if (status === "in_progress") inProgress++;
+    else pending++;
+  }
+
+  const totalProgress = tasks.reduce(
+    (sum, t) => sum + parseInt(t.AvanceTarea ?? "0", 10),
+    0
+  );
+  const overallProgress = tasks.length > 0 ? Math.round(totalProgress / tasks.length) : 0;
+
+  // Group by Gerencia (Rectora)
+  const gerenciaMap = new Map<number, GerenciaStats>();
+
+  for (const r of data) {
+    if (!gerenciaMap.has(r.IDUnidadRectora)) {
+      gerenciaMap.set(r.IDUnidadRectora, {
+        id: r.IDUnidadRectora,
+        name: r.Rectora.trim(),
+        progress: r.AvanceRectora,
+        totalTasks: 0,
+        completed: 0,
+        inProgress: 0,
+        pending: 0,
+      });
+    }
+
+    if (r.IDTarea !== null) {
+      const g = gerenciaMap.get(r.IDUnidadRectora)!;
+      g.totalTasks++;
+      const status = getTaskStatus(r);
+      if (status === "completed") g.completed++;
+      else if (status === "in_progress") g.inProgress++;
+      else g.pending++;
+    }
+  }
+
+  const gerencias = Array.from(gerenciaMap.values()).sort(
+    (a, b) => b.progress - a.progress
+  );
+
+  return {
+    totalTasks: tasks.length,
+    completed,
+    inProgress,
+    pending,
+    overallProgress,
+    gerencias,
+    products: computeProductStats(data),
+    riskyTasks: computeTaskRisks(data),
+    heatmapCells: computeHeatmapCells(data),
+  };
+}

@@ -1,64 +1,61 @@
 import Image from "next/image";
+import Link from "next/link";
+import { fetchTareasHeader, computeDashboardStats } from "@/lib/api";
+import { KpiCards } from "@/components/dashboard/kpi-cards";
+import { StatusBattery } from "@/components/dashboard/status-battery";
+import { GerenciaTable } from "@/components/dashboard/gerencia-table";
+import { DelayRiskPanel } from "@/components/dashboard/delay-risk-panel";
+import { ActivityHeatmap } from "@/components/dashboard/activity-heatmap";
+import { ProductLeaderboard } from "@/components/dashboard/product-leaderboard";
 
-export default function Home() {
+export default async function DashboardPage() {
+  const data = await fetchTareasHeader();
+  const stats = computeDashboardStats(data);
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
+    <div className="min-h-screen pb-12">
+      {/* Floating glass header */}
+      <div className="sticky top-4 z-50 mx-auto max-w-7xl px-6">
+        <header className="flex items-center justify-between rounded-2xl border border-white/40 bg-white/70 px-6 py-3 shadow-lg shadow-black/[0.03] backdrop-blur-xl">
+          <Link href="/" className="flex items-center gap-3">
             <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+              src="/kristhal-isotipo.png"
+              alt="KRISTHAL"
+              width={36}
+              height={36}
+              className="rounded-lg"
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          </Link>
+          <p className="text-sm font-medium text-muted-foreground">
+            Juegos Centroamericanos y del Caribe 2026
+          </p>
+        </header>
+      </div>
+
+      {/* Dashboard */}
+      <main className="mx-auto max-w-7xl space-y-8 px-6 pt-8">
+        {/* Row 1: KPI Cards */}
+        <KpiCards stats={stats} />
+
+        {/* Row 2: Status Battery */}
+        <StatusBattery
+          completed={stats.completed}
+          inProgress={stats.inProgress}
+          pending={stats.pending}
+          total={stats.totalTasks}
+        />
+
+        {/* Row 3: Gerencia Table */}
+        <GerenciaTable gerencias={stats.gerencias} />
+
+        {/* Row 4: Delay Risk Panel */}
+        <DelayRiskPanel riskyTasks={stats.riskyTasks} />
+
+        {/* Row 5: Activity Heatmap */}
+        <ActivityHeatmap heatmapCells={stats.heatmapCells} />
+
+        {/* Row 6: Product Leaderboard */}
+        <ProductLeaderboard products={stats.products} />
       </main>
     </div>
   );
