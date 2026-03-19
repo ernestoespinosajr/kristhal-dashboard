@@ -138,7 +138,7 @@ export function KpiCards({ stats }: KpiCardsProps) {
   }, [counters[0].progress, counters[1].progress, counters[2].progress]);
 
   return (
-    <div ref={containerRef} className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+    <div ref={containerRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       {kpis.map(({ key, label, icon: Icon, color, bg }, i) => (
         <Card
           key={key}
