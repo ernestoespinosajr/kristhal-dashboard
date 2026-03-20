@@ -1,4 +1,4 @@
-import { TareaHeader, DashboardStats, GerenciaStats, ProductStats, TaskRisk, HeatmapCell } from "@/types/api";
+import { TareaHeader, DashboardStats, GerenciaStats, UnidadEjecutoraStats, ProductStats, TaskRisk, HeatmapCell } from "@/types/api";
 
 const API_BASE = "https://squareconnection.azurewebsites.net/api";
 
@@ -121,8 +121,9 @@ export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
   );
   const overallProgress = tasks.length > 0 ? Math.round(totalProgress / tasks.length) : 0;
 
-  // Group by Gerencia (Rectora)
+  // Group by Gerencia (Rectora) and UnidadEjecutora
   const gerenciaMap = new Map<number, GerenciaStats>();
+  const unitMap = new Map<number, UnidadEjecutoraStats>();
 
   for (const r of data) {
     if (!gerenciaMap.has(r.IDUnidadRectora)) {
@@ -130,6 +131,21 @@ export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
         id: r.IDUnidadRectora,
         name: r.Rectora.trim(),
         progress: r.AvanceRectora,
+        totalTasks: 0,
+        completed: 0,
+        inProgress: 0,
+        pending: 0,
+        units: [],
+      });
+    }
+
+    if (!unitMap.has(r.IDUnidadEjecutora)) {
+      unitMap.set(r.IDUnidadEjecutora, {
+        id: r.IDUnidadEjecutora,
+        name: r.UnidadEjecutora.trim(),
+        progress: r.AvanceEjecutora,
+        gerenciaId: r.IDUnidadRectora,
+        gerenciaName: r.Rectora.trim(),
         totalTasks: 0,
         completed: 0,
         inProgress: 0,
@@ -144,7 +160,24 @@ export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
       if (status === "completed") g.completed++;
       else if (status === "in_progress") g.inProgress++;
       else g.pending++;
+
+      const u = unitMap.get(r.IDUnidadEjecutora)!;
+      u.totalTasks++;
+      if (status === "completed") u.completed++;
+      else if (status === "in_progress") u.inProgress++;
+      else u.pending++;
     }
+  }
+
+  // Attach units to their gerencia
+  for (const unit of unitMap.values()) {
+    const g = gerenciaMap.get(unit.gerenciaId);
+    if (g) g.units.push(unit);
+  }
+
+  // Sort units within each gerencia by progress desc
+  for (const g of gerenciaMap.values()) {
+    g.units.sort((a, b) => b.progress - a.progress);
   }
 
   const gerencias = Array.from(gerenciaMap.values()).sort(

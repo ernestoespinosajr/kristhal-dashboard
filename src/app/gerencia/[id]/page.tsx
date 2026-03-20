@@ -19,8 +19,8 @@ export default async function GerenciaPage({ params }: Props) {
   const gerencia = stats.gerencias.find((g) => g.id === gerenciaId);
   if (!gerencia) notFound();
 
-  const tasks = data.filter(
-    (r) => r.IDUnidadRectora === gerenciaId && r.IDTarea !== null
+  const allRecords = data.filter(
+    (r) => r.IDUnidadRectora === gerenciaId
   );
 
   return (
@@ -58,7 +58,7 @@ export default async function GerenciaPage({ params }: Props) {
           </h1>
         </div>
 
-        <GerenciaDetail gerencia={gerencia} tasks={tasks} />
+        <GerenciaDetail gerencia={gerencia} records={allRecords} />
       </main>
     </div>
   );

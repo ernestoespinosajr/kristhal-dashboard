@@ -19,6 +19,18 @@ export interface TareaHeader {
   fechaFinejecucion: string | null;
 }
 
+export interface UnidadEjecutoraStats {
+  id: number;
+  name: string;
+  progress: number;
+  gerenciaId: number;
+  gerenciaName: string;
+  totalTasks: number;
+  completed: number;
+  inProgress: number;
+  pending: number;
+}
+
 export interface GerenciaStats {
   id: number;
   name: string;
@@ -27,6 +39,7 @@ export interface GerenciaStats {
   completed: number;
   inProgress: number;
   pending: number;
+  units: UnidadEjecutoraStats[];
 }
 
 export interface ProductStats {

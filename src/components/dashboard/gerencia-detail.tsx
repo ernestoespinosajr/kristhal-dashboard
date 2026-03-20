@@ -1,15 +1,8 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -18,53 +11,17 @@ import {
   Clock,
   AlertCircle,
   AlertTriangle,
-  ChevronLeft,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 import { GerenciaStats, TareaHeader } from "@/types/api";
 import { useScrollVisible } from "@/lib/use-scroll-visible";
+import { formatDate, getDelayDays, getStatus, statusConfig } from "@/lib/task-utils";
 
 interface GerenciaDetailProps {
   gerencia: GerenciaStats;
-  tasks: TareaHeader[];
+  records: TareaHeader[];
 }
-
-const PAGE_SIZE = 8;
-
-function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return d.toLocaleDateString("es-DO", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function getDelayDays(task: TareaHeader): number {
-  if (!task.FechaFin) return 0;
-  const avance = parseInt(task.AvanceTarea ?? "0", 10);
-  if (avance >= 100) return 0;
-  const end = new Date(task.FechaFin);
-  const now = new Date();
-  const diff = Math.floor(
-    (now.getTime() - end.getTime()) / (1000 * 60 * 60 * 24)
-  );
-  return Math.max(0, diff);
-}
-
-function getStatus(task: TareaHeader): "completed" | "in_progress" | "pending" {
-  const avance = parseInt(task.AvanceTarea ?? "0", 10);
-  if (avance >= 100) return "completed";
-  if (avance > 0) return "in_progress";
-  return "pending";
-}
-
-const statusConfig = {
-  completed: { label: "Completado", variant: "default" as const, className: "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" },
-  in_progress: { label: "En Proceso", variant: "default" as const, className: "bg-amber-100 text-amber-700 hover:bg-amber-100" },
-  pending: { label: "Pendiente", variant: "default" as const, className: "bg-rose-100 text-rose-600 hover:bg-rose-100" },
-};
 
 const kpis = [
   { key: "totalTasks" as const, label: "Total Tareas", icon: ClipboardList, color: "text-primary", bg: "bg-primary/10" },
@@ -73,7 +30,6 @@ const kpis = [
   { key: "pending" as const, label: "Pendientes", icon: AlertCircle, color: "text-rose-500", bg: "bg-rose-50" },
 ];
 
-// --- Count-up hook (reused from KPI cards logic) ---
 function useCountUp(target: number, duration: number) {
   const [count, setCount] = useState(0);
   const [started, setStarted] = useState(false);
@@ -102,12 +58,76 @@ function useCountUp(target: number, duration: number) {
   return { count, progress, start };
 }
 
-export function GerenciaDetail({ gerencia, tasks }: GerenciaDetailProps) {
-  const [page, setPage] = useState(0);
-  const { ref: kpiRef, visible: kpiVisible } = useScrollVisible();
-  const { ref: tableRef, visible: tableVisible } = useScrollVisible();
+function progressColor(pct: number): string {
+  if (pct >= 75) return "bg-emerald-500";
+  if (pct >= 40) return "bg-amber-400";
+  return "bg-rose-400";
+}
 
-  // Animated counters for the 4 KPI cards
+interface GroupedUnit {
+  id: number;
+  name: string;
+  progress: number;
+  products: GroupedProduct[];
+}
+
+interface GroupedProduct {
+  id: number;
+  name: string;
+  progress: number;
+  tasks: TareaHeader[];
+}
+
+function groupRecordsHierarchically(records: TareaHeader[]): GroupedUnit[] {
+  const unitMap = new Map<number, GroupedUnit>();
+
+  for (const r of records) {
+    // Discover all units and products from every record (including org-structure-only rows)
+    if (!unitMap.has(r.IDUnidadEjecutora)) {
+      unitMap.set(r.IDUnidadEjecutora, {
+        id: r.IDUnidadEjecutora,
+        name: r.UnidadEjecutora.trim(),
+        progress: r.AvanceEjecutora,
+        products: [],
+      });
+    }
+    const unit = unitMap.get(r.IDUnidadEjecutora)!;
+
+    if (r.IDProductos != null && r.Producto != null) {
+      let product = unit.products.find((p) => p.id === r.IDProductos);
+      if (!product) {
+        product = {
+          id: r.IDProductos,
+          name: r.Producto.trim(),
+          progress: r.AvanceProducto ?? 0,
+          tasks: [],
+        };
+        unit.products.push(product);
+      }
+      // Only add actual tasks (not org-structure-only rows)
+      if (r.IDTarea !== null) {
+        product.tasks.push(r);
+      }
+    }
+  }
+
+  return Array.from(unitMap.values()).sort((a, b) => b.progress - a.progress);
+}
+
+export function GerenciaDetail({ gerencia, records }: GerenciaDetailProps) {
+  const { ref: kpiRef, visible: kpiVisible } = useScrollVisible();
+  const { ref: tableRef, visible: tableVisible } = useScrollVisible(0.01);
+
+  const [expandedUnits, setExpandedUnits] = useState<Set<number>>(new Set());
+  const [expandedProducts, setExpandedProducts] = useState<Set<string>>(new Set());
+
+  const grouped = useMemo(() => groupRecordsHierarchically(records), [records]);
+
+  // Expand all units by default
+  useEffect(() => {
+    setExpandedUnits(new Set(grouped.map((u) => u.id)));
+  }, [grouped]);
+
   const counters = [
     useCountUp(gerencia.totalTasks, 700),
     useCountUp(gerencia.completed, 700),
@@ -115,7 +135,6 @@ export function GerenciaDetail({ gerencia, tasks }: GerenciaDetailProps) {
     useCountUp(gerencia.pending, 700),
   ];
 
-  // Cascade: start first on visible, chain the rest at 90%
   useEffect(() => {
     if (kpiVisible) counters[0].start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -128,24 +147,23 @@ export function GerenciaDetail({ gerencia, tasks }: GerenciaDetailProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counters[0].progress, counters[1].progress, counters[2].progress]);
 
-  const totalPages = Math.ceil(tasks.length / PAGE_SIZE);
-  const paginated = useMemo(
-    () => tasks.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE),
-    [tasks, page]
-  );
+  function toggleUnit(id: number) {
+    setExpandedUnits((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
-  // Reset row animations on page change
-  const [rowsReady, setRowsReady] = useState(false);
-  useEffect(() => {
-    setRowsReady(false);
-    const id = requestAnimationFrame(() => setRowsReady(true));
-    return () => cancelAnimationFrame(id);
-  }, [page]);
-
-  // Also trigger rows on initial table visible
-  useEffect(() => {
-    if (tableVisible) setRowsReady(true);
-  }, [tableVisible]);
+  function toggleProduct(key: string) {
+    setExpandedProducts((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-8">
@@ -175,7 +193,6 @@ export function GerenciaDetail({ gerencia, tasks }: GerenciaDetailProps) {
           </Card>
         ))}
 
-        {/* Avance card */}
         <Card
           className="rounded-2xl border-0 shadow-sm transition-all duration-500 ease-out"
           style={{
@@ -196,139 +213,165 @@ export function GerenciaDetail({ gerencia, tasks }: GerenciaDetailProps) {
         </Card>
       </div>
 
-      {/* Task table */}
+      {/* Hierarchical view: Unidad Ejecutora sections */}
       <div
         ref={tableRef}
-        className="transition-all duration-500 ease-out"
+        className="space-y-4 transition-all duration-500 ease-out"
         style={{
           opacity: tableVisible ? 1 : 0,
           transform: tableVisible ? "translateY(0)" : "translateY(12px)",
         }}
       >
-        <Card className="rounded-2xl border-0 shadow-sm">
-          <CardContent className="p-0">
-            <div className="px-6 py-4">
-              <h2 className="text-lg font-semibold">Lista de Tareas</h2>
-            </div>
-            <Table>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="pl-6 w-[30%]">Tarea</TableHead>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Inicio</TableHead>
-                  <TableHead>Fin</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-center">% Avance</TableHead>
-                  <TableHead className="pr-6 text-center">Retardo</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {paginated.map((task, i) => {
-                  const status = getStatus(task);
-                  const delay = getDelayDays(task);
-                  const avance = parseInt(task.AvanceTarea ?? "0", 10);
-                  const cfg = statusConfig[status];
-                  const show = tableVisible && rowsReady;
-
-                  return (
-                    <TableRow
-                      key={task.IDTarea}
-                      style={{
-                        opacity: show ? 1 : 0,
-                        transform: show ? "translateY(0)" : "translateY(8px)",
-                        transition: `opacity 400ms ease ${i * 40}ms, transform 400ms ease ${i * 40}ms`,
-                      }}
-                    >
-                      <TableCell className="pl-6 font-medium max-w-xs">
-                        <span className="line-clamp-2">{task.Tarea}</span>
-                      </TableCell>
-                      <TableCell className="text-muted-foreground max-w-[160px]">
-                        <span className="line-clamp-1">{task.Producto ?? "—"}</span>
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {formatDate(task.FechaInicio)}
-                      </TableCell>
-                      <TableCell className="tabular-nums text-muted-foreground">
-                        {formatDate(task.FechaFin)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={cfg.variant} className={cfg.className}>
-                          {cfg.label}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center gap-2">
-                          <div className="h-1.5 flex-1 rounded-full bg-muted">
-                            <div
-                              className="h-full rounded-full bg-primary"
-                              style={{
-                                width: show ? `${Math.min(avance, 100)}%` : "0%",
-                                transition: `width 600ms cubic-bezier(0.22, 1, 0.36, 1) ${i * 40 + 200}ms`,
-                              }}
-                            />
-                          </div>
-                          <span className="w-10 text-right text-sm tabular-nums font-medium">
-                            {avance}%
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="pr-6 text-center">
-                        {delay > 0 ? (
-                          <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-600">
-                            <AlertTriangle className="h-3.5 w-3.5" />
-                            {delay}d
-                          </span>
-                        ) : (
-                          <span className="text-sm text-muted-foreground">0d</span>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between border-t px-6 py-4">
-                <p className="text-sm text-muted-foreground">
-                  Mostrando {page * PAGE_SIZE + 1}–
-                  {Math.min((page + 1) * PAGE_SIZE, tasks.length)} de{" "}
-                  {tasks.length} tareas
-                </p>
-                <div className="flex items-center gap-1">
-                  <button
-                    onClick={() => setPage((p) => Math.max(0, p - 1))}
-                    disabled={page === 0}
-                    className="rounded-lg p-2 transition-colors hover:bg-muted disabled:opacity-30"
+        {/* Unit section headers */}
+        {grouped.map((unit, ui) => (
+          <Card key={unit.id} className="rounded-2xl border-0 shadow-sm overflow-hidden">
+            <button
+              onClick={() => toggleUnit(unit.id)}
+              className="flex w-full items-center justify-between px-6 py-4 text-left transition-colors hover:bg-muted/50"
+            >
+              <div className="flex items-center gap-3">
+                {expandedUnits.has(unit.id) ? (
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                )}
+                <div>
+                  <Link
+                    href={`/unidad/${gerencia.id}/${unit.id}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-base font-semibold hover:underline"
                   >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-                  {Array.from({ length: totalPages }, (_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setPage(i)}
-                      className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors ${
-                        i === page
-                          ? "bg-primary text-primary-foreground"
-                          : "hover:bg-muted"
-                      }`}
-                    >
-                      {i + 1}
-                    </button>
-                  ))}
-                  <button
-                    onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                    disabled={page === totalPages - 1}
-                    className="rounded-lg p-2 transition-colors hover:bg-muted disabled:opacity-30"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
+                    {unit.name}
+                  </Link>
+                  <p className="text-sm text-muted-foreground">
+                    {unit.products.reduce((sum, p) => sum + p.tasks.length, 0)} tareas
+                  </p>
                 </div>
               </div>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2 w-32">
+                  <div className="h-2 flex-1 rounded-full bg-muted">
+                    <div
+                      className={`h-2 rounded-full ${progressColor(unit.progress)}`}
+                      style={{ width: `${Math.min(unit.progress, 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-sm font-medium tabular-nums">{unit.progress}%</span>
+                </div>
+              </div>
+            </button>
+
+            {expandedUnits.has(unit.id) && (
+              <div className="border-t">
+                <table className="w-full" style={{ tableLayout: "fixed" }}>
+                  <colgroup>
+                    <col style={{ width: "35%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "12%" }} />
+                    <col style={{ width: "13%" }} />
+                    <col style={{ width: "16%" }} />
+                    <col style={{ width: "12%" }} />
+                  </colgroup>
+                  <tbody>
+                    {unit.products.map((product) => {
+                      const productKey = `${unit.id}-${product.id}`;
+                      const isProductExpanded = expandedProducts.has(productKey);
+
+                      return (
+                        <React.Fragment key={product.id}>
+                          {/* Product sub-header row */}
+                          <tr
+                            className="bg-muted/20 border-b cursor-pointer transition-colors hover:bg-muted/40"
+                            onClick={() => toggleProduct(productKey)}
+                          >
+                            <td colSpan={6} className="px-6 py-3">
+                              <div className="flex items-center gap-3">
+                                {isProductExpanded ? (
+                                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                ) : (
+                                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                )}
+                                <span className="text-sm font-medium truncate" title={product.name}>
+                                  {product.name}
+                                </span>
+                                <span className="text-xs text-muted-foreground shrink-0">
+                                  {product.tasks.length} tareas
+                                </span>
+                                <div className="flex items-center gap-2 ml-auto w-24 shrink-0">
+                                  <div className="h-1.5 flex-1 rounded-full bg-muted">
+                                    <div
+                                      className={`h-1.5 rounded-full ${progressColor(product.progress)}`}
+                                      style={{ width: `${Math.min(product.progress, 100)}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                                    {product.progress}%
+                                  </span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Task rows */}
+                          {isProductExpanded && product.tasks.map((task) => {
+                            const status = getStatus(task);
+                            const delay = getDelayDays(task);
+                            const avance = parseInt(task.AvanceTarea ?? "0", 10);
+                            const cfg = statusConfig[status];
+
+                            return (
+                              <tr key={task.IDTarea} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                                <td className="pl-14 pr-4 py-3 font-medium text-sm">
+                                  <span className="block truncate" title={task.Tarea ?? ""}>
+                                    {task.Tarea}
+                                  </span>
+                                </td>
+                                <td className="px-4 py-3 tabular-nums text-muted-foreground text-sm">
+                                  {formatDate(task.FechaInicio)}
+                                </td>
+                                <td className="px-4 py-3 tabular-nums text-muted-foreground text-sm">
+                                  {formatDate(task.FechaFin)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Badge variant={cfg.variant} className={cfg.className}>
+                                    {cfg.label}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-1.5 flex-1 rounded-full bg-muted">
+                                      <div
+                                        className="h-full rounded-full bg-primary"
+                                        style={{ width: `${Math.min(avance, 100)}%` }}
+                                      />
+                                    </div>
+                                    <span className="w-10 text-right text-sm tabular-nums font-medium shrink-0">
+                                      {avance}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3 pr-6 text-center">
+                                  {delay > 0 ? (
+                                    <span className="inline-flex items-center gap-1 text-sm font-medium text-amber-600">
+                                      <AlertTriangle className="h-3.5 w-3.5" />
+                                      {delay}d
+                                    </span>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">0d</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </React.Fragment>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </CardContent>
-        </Card>
+          </Card>
+        ))}
       </div>
     </div>
   );
