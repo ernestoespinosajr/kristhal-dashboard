@@ -4,7 +4,7 @@ const API_BASE = "https://squareconnection.azurewebsites.net/api";
 
 export async function fetchTareasHeader(): Promise<TareaHeader[]> {
   const res = await fetch(`${API_BASE}/TareasHeader`, {
-    next: { revalidate: 300 },
+    cache: "no-store",
   });
 
   if (!res.ok) {

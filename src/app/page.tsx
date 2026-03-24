@@ -8,6 +8,8 @@ import { DelayRiskPanel } from "@/components/dashboard/delay-risk-panel";
 import { ActivityHeatmap } from "@/components/dashboard/activity-heatmap";
 import { ProductLeaderboard } from "@/components/dashboard/product-leaderboard";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const data = await fetchTareasHeader();
   const stats = computeDashboardStats(data);
