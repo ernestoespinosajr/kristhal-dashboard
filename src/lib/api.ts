@@ -104,6 +104,13 @@ function computeHeatmapCells(data: TareaHeader[]): HeatmapCell[] {
 export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
   const tasks = data.filter((r) => r.IDTarea !== null);
 
+  // Count unique products (actividades)
+  const uniqueProducts = new Set<number>();
+  for (const r of data) {
+    if (r.IDProductos != null) uniqueProducts.add(r.IDProductos);
+  }
+  const totalActivities = uniqueProducts.size;
+
   let completed = 0;
   let inProgress = 0;
   let pending = 0;
@@ -115,11 +122,17 @@ export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
     else pending++;
   }
 
-  const totalProgress = tasks.reduce(
-    (sum, t) => sum + parseInt(t.AvanceTarea ?? "0", 10),
-    0
-  );
-  const overallProgress = tasks.length > 0 ? Math.round(totalProgress / tasks.length) : 0;
+  // Avance Global = average of each gerencia's AvanceRectora
+  const gerenciaAvances = new Map<number, number>();
+  for (const r of data) {
+    if (!gerenciaAvances.has(r.IDUnidadRectora)) {
+      gerenciaAvances.set(r.IDUnidadRectora, r.AvanceRectora);
+    }
+  }
+  const avanceValues = Array.from(gerenciaAvances.values());
+  const overallProgress = avanceValues.length > 0
+    ? Math.round(avanceValues.reduce((sum, v) => sum + v, 0) / avanceValues.length)
+    : 0;
 
   // Group by Gerencia (Rectora) and UnidadEjecutora
   const gerenciaMap = new Map<number, GerenciaStats>();
@@ -185,6 +198,7 @@ export function computeDashboardStats(data: TareaHeader[]): DashboardStats {
   );
 
   return {
+    totalActivities,
     totalTasks: tasks.length,
     completed,
     inProgress,

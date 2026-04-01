@@ -70,6 +70,7 @@ export interface HeatmapCell {
 }
 
 export interface DashboardStats {
+  totalActivities: number;
   totalTasks: number;
   completed: number;
   inProgress: number;

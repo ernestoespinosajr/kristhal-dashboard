@@ -21,6 +21,7 @@ import { formatDate, getDelayDays, getStatus, statusConfig } from "@/lib/task-ut
 interface GerenciaDetailProps {
   gerencia: GerenciaStats;
   records: TareaHeader[];
+  filterQuery?: string;
 }
 
 const kpis = [
@@ -114,7 +115,7 @@ function groupRecordsHierarchically(records: TareaHeader[]): GroupedUnit[] {
   return Array.from(unitMap.values()).sort((a, b) => b.progress - a.progress);
 }
 
-export function GerenciaDetail({ gerencia, records }: GerenciaDetailProps) {
+export function GerenciaDetail({ gerencia, records, filterQuery = "" }: GerenciaDetailProps) {
   const { ref: kpiRef, visible: kpiVisible } = useScrollVisible();
   const { ref: tableRef, visible: tableVisible } = useScrollVisible(0.01);
 
@@ -237,7 +238,7 @@ export function GerenciaDetail({ gerencia, records }: GerenciaDetailProps) {
                 )}
                 <div>
                   <Link
-                    href={`/unidad/${gerencia.id}/${unit.id}`}
+                    href={`/unidad/${gerencia.id}/${unit.id}${filterQuery}`}
                     onClick={(e) => e.stopPropagation()}
                     className="text-base font-semibold hover:underline"
                   >

@@ -1,18 +1,13 @@
+import { Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { fetchTareasHeader, computeDashboardStats } from "@/lib/api";
-import { KpiCards } from "@/components/dashboard/kpi-cards";
-import { StatusBattery } from "@/components/dashboard/status-battery";
-import { GerenciaTable } from "@/components/dashboard/gerencia-table";
-import { DelayRiskPanel } from "@/components/dashboard/delay-risk-panel";
-import { ActivityHeatmap } from "@/components/dashboard/activity-heatmap";
-import { ProductLeaderboard } from "@/components/dashboard/product-leaderboard";
+import { fetchTareasHeader } from "@/lib/api";
+import { DashboardContent } from "@/components/dashboard/dashboard-content";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const data = await fetchTareasHeader();
-  const stats = computeDashboardStats(data);
 
   return (
     <div className="min-h-screen pb-12">
@@ -36,28 +31,9 @@ export default async function DashboardPage() {
 
       {/* Dashboard */}
       <main className="mx-auto max-w-7xl space-y-8 px-6 pt-8">
-        {/* Row 1: KPI Cards */}
-        <KpiCards stats={stats} />
-
-        {/* Row 2: Status Battery */}
-        <StatusBattery
-          completed={stats.completed}
-          inProgress={stats.inProgress}
-          pending={stats.pending}
-          total={stats.totalTasks}
-        />
-
-        {/* Row 3: Gerencia Table */}
-        <GerenciaTable gerencias={stats.gerencias} />
-
-        {/* Row 4: Delay Risk Panel */}
-        <DelayRiskPanel riskyTasks={stats.riskyTasks} />
-
-        {/* Row 5: Activity Heatmap */}
-        <ActivityHeatmap heatmapCells={stats.heatmapCells} />
-
-        {/* Row 6: Product Leaderboard */}
-        <ProductLeaderboard products={stats.products} />
+        <Suspense>
+          <DashboardContent data={data} />
+        </Suspense>
       </main>
     </div>
   );

@@ -2,12 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  ClipboardList,
-  CheckCircle2,
-  Clock,
-  AlertCircle,
-} from "lucide-react";
+import { Layers, ClipboardList, TrendingUp } from "lucide-react";
 import { DashboardStats } from "@/types/api";
 
 interface KpiCardsProps {
@@ -16,32 +11,28 @@ interface KpiCardsProps {
 
 const kpis = [
   {
+    key: "totalActivities" as const,
+    label: "Total Actividades",
+    icon: Layers,
+    color: "text-primary",
+    bg: "bg-primary/10",
+    suffix: "",
+  },
+  {
     key: "totalTasks" as const,
     label: "Total Tareas",
     icon: ClipboardList,
-    color: "text-primary",
-    bg: "bg-primary/10",
-  },
-  {
-    key: "completed" as const,
-    label: "Completadas",
-    icon: CheckCircle2,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
-  },
-  {
-    key: "inProgress" as const,
-    label: "En Proceso",
-    icon: Clock,
     color: "text-amber-600",
     bg: "bg-amber-50",
+    suffix: "",
   },
   {
-    key: "pending" as const,
-    label: "Pendientes",
-    icon: AlertCircle,
-    color: "text-rose-500",
-    bg: "bg-rose-50",
+    key: "overallProgress" as const,
+    label: "Avance Global",
+    icon: TrendingUp,
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
+    suffix: "%",
   },
 ];
 
@@ -96,10 +87,9 @@ export function KpiCards({ stats }: KpiCardsProps) {
   const [visible, setVisible] = useState(false);
 
   const counters = [
+    useCountUp(stats.totalActivities, COUNT_DURATION, 0),
     useCountUp(stats.totalTasks, COUNT_DURATION, 0),
-    useCountUp(stats.completed, COUNT_DURATION, 0),
-    useCountUp(stats.inProgress, COUNT_DURATION, 0),
-    useCountUp(stats.pending, COUNT_DURATION, 0),
+    useCountUp(stats.overallProgress, COUNT_DURATION, 0),
   ];
 
   // Intersection observer — start cascade when cards scroll into view
@@ -135,11 +125,11 @@ export function KpiCards({ stats }: KpiCardsProps) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counters[0].progress, counters[1].progress, counters[2].progress]);
+  }, [counters[0].progress, counters[1].progress]);
 
   return (
-    <div ref={containerRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {kpis.map(({ key, label, icon: Icon, color, bg }, i) => (
+    <div ref={containerRef} className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {kpis.map(({ key, label, icon: Icon, color, bg, suffix }, i) => (
         <Card
           key={key}
           className="rounded-2xl border-0 shadow-sm transition-all duration-500 ease-out"
@@ -155,7 +145,7 @@ export function KpiCards({ stats }: KpiCardsProps) {
             </div>
             <div>
               <p className="text-3xl font-semibold tracking-tight tabular-nums">
-                {counters[i].count}
+                {counters[i].count}{suffix}
               </p>
               <p className="text-sm text-muted-foreground">{label}</p>
             </div>

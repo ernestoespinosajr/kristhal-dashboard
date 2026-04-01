@@ -3,17 +3,24 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { fetchTareasHeader, computeDashboardStats } from "@/lib/api";
+import { parseFilterParams, filterDataByDate, buildFilterQuery } from "@/lib/filter-utils";
 import { GerenciaDetail } from "@/components/dashboard/gerencia-detail";
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
-export default async function GerenciaPage({ params }: Props) {
+export default async function GerenciaPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const sp = await searchParams;
   const gerenciaId = parseInt(id, 10);
 
-  const data = await fetchTareasHeader();
+  const filter = parseFilterParams(sp);
+  const filterQuery = buildFilterQuery(filter);
+
+  const rawData = await fetchTareasHeader();
+  const data = filterDataByDate(rawData, filter);
   const stats = computeDashboardStats(data);
 
   const gerencia = stats.gerencias.find((g) => g.id === gerenciaId);
@@ -47,7 +54,7 @@ export default async function GerenciaPage({ params }: Props) {
         {/* Back link + title */}
         <div className="space-y-1">
           <Link
-            href="/"
+            href={`/${filterQuery}`}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
           >
             <ArrowLeft className="h-4 w-4" />
@@ -58,7 +65,7 @@ export default async function GerenciaPage({ params }: Props) {
           </h1>
         </div>
 
-        <GerenciaDetail gerencia={gerencia} records={allRecords} />
+        <GerenciaDetail gerencia={gerencia} records={allRecords} filterQuery={filterQuery} />
       </main>
     </div>
   );

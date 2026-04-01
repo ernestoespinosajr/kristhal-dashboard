@@ -17,6 +17,7 @@ import { useScrollVisible } from "@/lib/use-scroll-visible";
 
 interface GerenciaTableProps {
   gerencias: GerenciaStats[];
+  filterQuery?: string;
 }
 
 function progressColor(pct: number): string {
@@ -25,7 +26,7 @@ function progressColor(pct: number): string {
   return "bg-rose-400";
 }
 
-export function GerenciaTable({ gerencias }: GerenciaTableProps) {
+export function GerenciaTable({ gerencias, filterQuery = "" }: GerenciaTableProps) {
   const { ref, visible } = useScrollVisible();
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
@@ -90,7 +91,7 @@ export function GerenciaTable({ gerencias }: GerenciaTableProps) {
                       </TableCell>
                       <TableCell>
                         <Link
-                          href={`/gerencia/${g.id}`}
+                          href={`/gerencia/${g.id}${filterQuery}`}
                           className="font-medium hover:underline"
                         >
                           {g.name}
@@ -121,7 +122,7 @@ export function GerenciaTable({ gerencias }: GerenciaTableProps) {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Link href={`/gerencia/${g.id}`}>
+                        <Link href={`/gerencia/${g.id}${filterQuery}`}>
                           <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                         </Link>
                       </TableCell>
@@ -142,7 +143,7 @@ export function GerenciaTable({ gerencias }: GerenciaTableProps) {
                           <TableCell className="w-[32px]" />
                           <TableCell className="pl-8 border-l-2 border-muted-foreground/20">
                             <Link
-                              href={`/unidad/${g.id}/${u.id}`}
+                              href={`/unidad/${g.id}/${u.id}${filterQuery}`}
                               className="text-sm font-medium hover:underline"
                             >
                               {u.name}
@@ -175,7 +176,7 @@ export function GerenciaTable({ gerencias }: GerenciaTableProps) {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Link href={`/unidad/${g.id}/${u.id}`}>
+                            <Link href={`/unidad/${g.id}/${u.id}${filterQuery}`}>
                               <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
                             </Link>
                           </TableCell>
