@@ -44,3 +44,4 @@ context/
 # claude
 CLAUDE.md
 .claude/
+.mcp.json
